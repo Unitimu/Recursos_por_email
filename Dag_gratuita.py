@@ -58,6 +58,10 @@ def download_resources_links(texto_email=''):
         links_atualizados = links_atualizados.readlines()
         links_atualizados = links_atualizados[14:]
 
+        for i,x in enumerate(links_atualizados):
+            if x == '':
+                links_atualizados.pop(i)
+
         sites_e_urls = {}
         for i,x in enumerate(links_atualizados):
             if x[:3] == '###':
