@@ -95,9 +95,9 @@ def download_resources_links(texto_email=''):
 
         data_hj = datetime.today().strftime('%Y-%m-%d')
 
-        links_a_verificar_file.write('\n'+'-'*15)
-        links_a_verificar_file.write(data_hj)
-        links_a_verificar_file.write('-'*15 + '\n')
+        # links_a_verificar_file.write('\n'+'-'*15)
+        # links_a_verificar_file.write(data_hj)
+        # links_a_verificar_file.write('-'*15 + '\n')
 
 
         for line in links_a_verificar:
