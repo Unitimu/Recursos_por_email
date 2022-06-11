@@ -9,15 +9,15 @@ from email.mime.multipart import MIMEMultipart
 import pymongo
 from datetime import datetime, timedelta
 
-# Ideias:
-# 1. Tornar tudo da udacity Fixo! Então provavelmente vou dar um split!
+# Urgente:
+# ! - Tornar tudo da udacity Fixo! Então provavelmente vou dar um split!
 
 # !!!Nova Regra a ser implementada:
 # 1. 
 
 # Afazeres:
 # 1. Quando não tiver o link, criar um link que vai usar a info adquirida para pesquisar no google
-# 2. 
+# 2. Criar uma headline com as palavras chaves daquele dia e.g: Python, Java, Hackaton
 # 2. Fazer o git clone quando a imagem for criada
 # 2.1 Para que seja necessário usar as credencias do git apenas uma vez: usar git config --global credential.helper store
 
@@ -51,7 +51,19 @@ def mongoCollection():
 
     return collection_grat
 
-def download_resources_links(texto_email=''):
+def create_line_to_email(desc,link):
+
+    linha = f'<li><p><strong>{desc}.&nbsp;</strong><a style="text-decoration:underline;color:#000" '
+    if link == 'Sem Link!':
+        linha += f'>{link}</a></p></li>'
+    else:
+        linha += f'target="_blank" href={link}>Link</a></p></li>'
+    return linha
+
+def data():
+    return datetime.today().strftime('%Y-%m-%d')
+
+def download_resources_links():
     path = '/opt/airflow/dags/free_monthly_learning_resources/resources/readme.md'
     # path = '/opt/airflow/dags/Testando_Airflow/teste_1.md'
     with open(path, 'r', encoding='utf-8') as links_atualizados:
@@ -78,54 +90,42 @@ def download_resources_links(texto_email=''):
         links_a_verificar = [link_hj for link_hj in sites_e_urls.keys() if link_hj not in links_ontem]
         if links_a_verificar == []:
             return 'sem_novidades'
-        # t_lav = [l for l in t_lh if l not in ['27']]
-        # for link_hj in links_atualizados:
-        #     if link_hj not in links_ontem:
-        #         links_a_verificar.append(link_hj)
-
 
     with open('/opt/airflow/dags/links_novos.md', 'w', encoding='utf-8') as links_a_atualizar:
         for line in links_atualizados:
             links_a_atualizar.write(line)
 
+    # Caso um dia decida-se salvar os dados localmente, será usado esse arquivo:
     with open('/opt/airflow/links_a_verificar.md', 'a', encoding='utf-8') as links_a_verificar_file:
-        # texto_email += '<ul>'
+
         collection_urls = mongoCollection()
-        json_links = []
+        json_para_collection = []
+        data_hj = data()
 
-        data_hj = datetime.today().strftime('%Y-%m-%d')
-
-        # links_a_verificar_file.write('\n'+'-'*15)
-        # links_a_verificar_file.write(data_hj)
-        # links_a_verificar_file.write('-'*15 + '\n')
-
-
+        texto_email= '<ul>'
         for line in links_a_verificar:
             if len(line) < 3:
-            #     texto_email += '\n'
                 continue
-            # links_a_verificar_file.write(line + '\n')
-            # links_a_verificar_file.write(sites_e_urls[line] + '\n')
+            desc = line.strip('# \n')
+            k,v = desc, sites_e_urls[line].strip('\n')
+            texto_email += create_line_to_email(k,v)
 
-            texto_email += f'{line}<br>'
-            texto_email += f'{sites_e_urls[line]}<br><br>'
+            item_json = {'info':k,
+                    'url':v,
+                    'data':data_hj}
 
-            item = {'info':line,
-                'url':sites_e_urls[line],
-                'data':data_hj}
+            json_para_collection.append(item_json)
 
-            json_links.append(item)
+        texto_email += '</ul>'
+        collection_urls.insert_many(json_para_collection)
 
-        # links_a_verificar_file.write('-'*30)
-        collection_urls.insert_many(json_links)
 
-        # texto_email += '</ul>'
     return texto_email
 
-def send_email_basic(sender='email_teste@gmail.com', receiver=lista_mails, email_subject='Novos recursos do dia'):
+def send_email_basic(receiver=lista_mails):
     port = 465  # For SSL
     smtp_server = "smtp.gmail.com"
-    sender_email = sender  # Enter your address
+    sender_email = 'sender@gmail.com'  # Enter your address
     receiver_email = receiver  # Enter receiver address
     password = 'goodpassword' # Enter your gmail password
     email_html = download_resources_links()
@@ -138,18 +138,13 @@ def send_email_basic(sender='email_teste@gmail.com', receiver=lista_mails, email
     # Add HTML/plain-text parts to MIMEMultipart message
     # The email client will try to render the last part first
     message.attach(part2)
-    message["Subject"] = email_subject
+    message["Subject"] = f'Novos recursos do dia! ({data()})'
     message["From"] = sender_email
-    ## iterating through the receiver list
-    # for mail in lista_mails:
-    # message["To"] = ', '.join(receiver_email) 
+
     context = ssl.create_default_context()
     with smtplib.SMTP_SSL(smtp_server, port, context=context) as server:
         server.login(sender_email, password)
-        # for mail in receiver_email:
         message["To"] = 'mim@gmail.com'
-        # message['Cc'] = ', '.join(receiver_email)
-        message['Cc'] = 'mim@gmail.com'
 
         server.sendmail(sender_email, receiver_email, message.as_string())
 
