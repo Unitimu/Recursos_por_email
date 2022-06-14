@@ -78,9 +78,9 @@ def data(fin='mongoDB', yesterday=False):
         data_format = data.strftime('%d/%m/%Y')
     return data_format
 
-def dic_to_mail_and_db(dic,json_para_collection=json_para_collection,data_hj=data_hj):
+def dic_to_mail_and_db(dic,json_para_collection,data_hj):
     texto_temp = ''
-    for k,val in dic:
+    for k,val in dic.items():
         # if len(line) < 3:
         #     continue
         v = val.strip('\n')
@@ -138,6 +138,7 @@ def download_resources_links():
         for i,x in enumerate(links_atualizados):
             if x == '':
                 links_atualizados.pop(i)
+            links_atualizados[i] = x.strip('# \n')
 
         sites_e_urls = {}
         for i,x in enumerate(links_atualizados):
@@ -173,11 +174,11 @@ def download_resources_links():
 
     if dic_exp != {}:
         texto_email = '<h3>Expansão</h3><ul>'
-        texto_email += dic_to_mail_and_db(dic_exp)
+        texto_email += dic_to_mail_and_db(dic_exp,json_para_collection,data_hj)
 
     if links_a_verificar_base != {}:
         texto_email = '<h3>Base</h3><ul>'
-        texto_email += dic_to_mail_and_db(links_a_verificar_base)
+        texto_email += dic_to_mail_and_db(links_a_verificar_base,json_para_collection,data_hj)
 
     collection_urls.insert_many(json_para_collection)
 
@@ -186,7 +187,7 @@ def download_resources_links():
 def send_email_basic(receiver=lista_mails):
     port = 465  # For SSL
     smtp_server = "smtp.gmail.com"
-    sender_email = 'Recursos por Email <uiuiunitimu@gmail.com>'  # Enter your address
+    sender_email = 'uiuiunitimu@gmail.com'  # Enter your address
     receiver_email = receiver  # Enter receiver address
     password = 'goodpassword' # Enter your gmail password
     email_html = download_resources_links()
@@ -201,7 +202,7 @@ def send_email_basic(receiver=lista_mails):
     message.attach(part2)
     data_mail = data(fin='mail')
     message["Subject"] = f'Novos recursos do dia! ({data_mail})'
-    message["From"] = sender_email
+    message["From"] = 'Recursos por Email <uiuiunitimu@gmail.com>' 
 
     context = ssl.create_default_context()
     with smtplib.SMTP_SSL(smtp_server, port, context=context) as server:
