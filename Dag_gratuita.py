@@ -11,10 +11,13 @@ from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 import requests
 import re
-
+import psycopg2
+import pandas as pd
 
 # Urgente:
-# 1.
+# 0.
+# 1.Verificar a viabilidade da expansão pelo Linkedin
+# 2.
 
 # !!!Nova Regra a ser implementada:
 # 1. 
@@ -28,6 +31,7 @@ import re
 
 # Expandir o projeto:
 # 1. Descrever os pré requisitos das bolsas de estudo, cursos e competições
+# 2. https://letscode.com.br/processos-seletivos
 # 3.1. Semantix Academy - Não possui um link específico com os cursos, sendo necessário avaliar outras formas de fazer isso: Talvez pelo linkedin ?
 # 3.2. MJV LAB - mesma questão da 3.1
 # 3.3. Hackaton Brasil - mesma questão da 3.1, talvez pelo instagram?
@@ -44,13 +48,28 @@ default_args = {
             "start_date": datetime(2019, 1, 1),
             "email_on_failure": False,
             "email_on_retry": False,
-            "email": ["email_teste1@gmail.com"],
+            "email": ["uiuiunitimu@gmail.com"],
             "retries": 3,
             "retry_delay": timedelta(seconds=20)
         }
 
+def capturar_emails():
+    """Seleciona os emails cadastrados"""
+    conn = psycopg2.connect(
+        host="host",
+        database="database",
+        user="user",
+        password="password")
+
+    query ="""SELECT email
+    FROM main_data;"""
+
+    emails_a_enviar = pd.read_sql(query,conn).values
+    return emails_a_enviar
 
 def mongoCollection():
+    """Conectando no MongoDB e selecionando a Collection que armazenará os dados coletados"""
+
     client = pymongo.MongoClient("mongodb+srv://user:password@cluster-name/?retryWrites=true&w=majority")
 
     db = client['db-gratuito']
@@ -59,6 +78,7 @@ def mongoCollection():
     return collection_grat
 
 def create_line_to_email(desc,link):
+    """Formatando as novidades para que elas sejam lidas de forma clara no email"""
 
     linha = f'<li><p><strong>{desc}.&nbsp;</strong><a style="text-decoration:underline;color:#000" '
     if link == 'Sem Link!':
@@ -68,6 +88,7 @@ def create_line_to_email(desc,link):
     return linha
 
 def data(fin='mongoDB', yesterday=False):
+    """Coletando a data de hoje para múltiplas finalidades"""
     data = datetime.today()
     if yesterday:
         data -= timedelta(days=1)
@@ -79,15 +100,16 @@ def data(fin='mongoDB', yesterday=False):
     return data_format
 
 def dic_to_mail_and_db(dic,json_para_collection,data_hj):
+    """Loop dos dicionários que armazenam as novidades para que elas sejam enviadas por email e para o DB"""
     texto_temp = ''
     for k,val in dic.items():
         # if len(line) < 3:
         #     continue
         v = val.strip('\n')
-        texto_temp += create_line_to_email(k,val)
+        texto_temp += create_line_to_email(k,v)
 
         item_json = {'info':k,
-                'url':val,
+                'url':v,
                 'data':data_hj}
 
         json_para_collection.append(item_json)
@@ -96,6 +118,7 @@ def dic_to_mail_and_db(dic,json_para_collection,data_hj):
     return texto_temp
 
 def google_scrapping(soup,dic_exp):
+    """Capturando Urls e Descrições das novidades que foram encontradas"""
     
     links = soup.html.find_all('div',attrs={'class':'egMi0 kCrYT'})
 
@@ -114,25 +137,29 @@ def google_scrapping(soup,dic_exp):
     return dic_exp
 
 def expansao():
+    """Usando Web Scrapping + Google Dorking para encontrar novidades"""
 
     sites = ['udacity.com%2Fscholarships','dio.me%2Fbootcamp']
     dic_exp = {}
-    data_hoje = data()
+    data_ontem = data(yesterday=True)
 
     for site in sites:
-        url = f'https://www.google.com/search?q=allinurl%3A%22https%3A%2F%2F{site}%22++after%3A{data_hoje}'
-        page=requests.get(url)
-        soup=BeautifulSoup(page.text,'html.parser')
+        url = f'https://www.google.com/search?q=allinurl%3A%22https%3A%2F%2F{site}%22++after%3A{data_ontem}'
+        page = requests.get(url)
+        soup = BeautifulSoup(page.text,'html.parser')
         google_scrapping(soup,dic_exp)
 
     return dic_exp 
 
 
 def download_resources_links():
+    """Procurando todos os links novos"""
+
     path = '/opt/airflow/dags/free_monthly_learning_resources/resources/readme.md'
-    # path = '/opt/airflow/dags/Testando_Airflow/teste_1.md'
     with open(path, 'r', encoding='utf-8') as links_atualizados:
         links_atualizados = links_atualizados.readlines()
+
+        # As 14 primeiras linhas são sempre iguais
         links_atualizados = links_atualizados[14:]
 
         for i,x in enumerate(links_atualizados):
@@ -144,30 +171,39 @@ def download_resources_links():
         for i,x in enumerate(links_atualizados):
             if x[:3] == '###':
                 link = links_atualizados[i+1]
-                chave = x.strip('# \n')
                 if link[:5] == 'https':
-                    sites_e_urls[chave] = link
+                    sites_e_urls[x] = link
                 else:
-                    sites_e_urls[chave] = 'Sem Link!'
-
+                    sites_e_urls[x] = 'Sem Link!'
+    
+    # Comparar 'links_hoje' com 'links_ontem':
     with open('/opt/airflow/dags/links_novos.md', 'r', encoding='utf-8') as links_desatualizados:
         links_ontem = links_desatualizados.readlines()
-        # Comparar 'links_hoje' com 'links_ontem':
         links_a_verificar_base = {link_hj_k:link_hj_v for link_hj_k,link_hj_v in sites_e_urls.items() if link_hj_k not in links_ontem}
-
+    
+    # Mantendo o arquivo local atualizado:
     with open('/opt/airflow/dags/links_novos.md', 'w', encoding='utf-8') as links_a_atualizar:
-        # Mantendo o arquivo local atualizado:
         for line in links_atualizados:
             links_a_atualizar.write(line)
 
+    # Capturando novos links por web scrapping
     dic_exp = expansao()
+
+    # Verificando se os links já foram capturados anteriormente:
+    with open('/opt/airflow/dags/links_exp.txt', 'w', encoding='utf-8') as file_links_exp_ontem:
+        for k in dic_exp.keys():
+            if k in file_links_exp_ontem:
+                del dic_exp[k]
+
+        for link in dic_exp.keys():
+            file_links_exp_ontem.write(link)
+
+
+    # Verificando se não houve novidades
     if links_a_verificar_base == {} == dic_exp:
         return 'sem_novidades'
 
-
-    # Caso um dia decida-se salvar os dados localmente, será usado esse arquivo:
-    # with open('/opt/airflow/links_a_verificar.md', 'a', encoding='utf-8') as links_a_verificar_file:
-
+    # Preparando os dados para serem enviados e os registrando no banco de dados
     collection_urls = mongoCollection()
     json_para_collection = []
     data_hj = data()
@@ -184,21 +220,21 @@ def download_resources_links():
 
     return texto_email
 
-def send_email_basic(receiver=lista_mails):
+def send_email_basic():
+    """Funão que envia os emails para as pessoas cadastradas"""
+
     port = 465  # For SSL
     smtp_server = "smtp.gmail.com"
     sender_email = 'uiuiunitimu@gmail.com'  # Enter your address
-    receiver_email = receiver  # Enter receiver address
+    receiver_email = capturar_emails()  # Enter receiver address
     password = 'goodpassword' # Enter your gmail password
     email_html = download_resources_links()
     if email_html == 'sem_novidades':
         return 'sem_novidades'
 
     message = MIMEMultipart("multipart")
-    # Turn these into plain/html MIMEText objects
     part2 = MIMEText(email_html, "html")
-    # Add HTML/plain-text parts to MIMEMultipart message
-    # The email client will try to render the last part first
+
     message.attach(part2)
     data_mail = data(fin='mail')
     message["Subject"] = f'Novos recursos do dia! ({data_mail})'
@@ -207,6 +243,8 @@ def send_email_basic(receiver=lista_mails):
     context = ssl.create_default_context()
     with smtplib.SMTP_SSL(smtp_server, port, context=context) as server:
         server.login(sender_email, password)
+
+        # Macete para que todos que recebam o email sejam anonimizadas
         message["To"] = 'mim@gmail.com'
 
         server.sendmail(sender_email, receiver_email, message.as_string())
