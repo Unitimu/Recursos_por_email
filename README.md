@@ -1,7 +1,7 @@
 # Recursos_por_email
 ## Projeto para facilitar a descoberta de bolsas de estudo, cursos, competições e certificados em promoção.
 
-# Link para se cadastrar: https://recursos-por-email.herokuapp.com/
+## Link para se cadastrar: https://recursos-por-email.herokuapp.com/
 
 ### Observações: 
 #### 1.Não é necesário conhecimento de Airflow para colaborar no projeto!
